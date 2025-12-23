@@ -1,109 +1,77 @@
- const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
-const yts = require("yt-search");
+const a = require("axios");
+const b = require("fs");
+const c = require("path");
+const d = require("yt-search");
 
-const tmpDir = path.join(__dirname, 'tmp');
-
-
-if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir);
-}
-
-async function downloadFile(url, filePath) {
-    const writer = fs.createWriteStream(filePath);
-    const response = await axios({
-        url,
-        method: 'GET',
-        responseType: 'stream'
-    });
-    response.data.pipe(writer);
-    return new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-    });
-}
+const nix = "https://raw.githubusercontent.com/aryannix/stuffs/master/raw/apis.json";
 
 module.exports = {
-    config: {
-        name: "song",
-        version: "1.0",
-        author: "Team Clayx|Rômeo",
-        countDown: 5,
-        role: 0,
-        shortDescription: {
-            en: "Download audio from YouTube."
+  config: {
+    name: "song",
+    aliases: ["music", "song"],
+    version: "0.0.1",
+    author: "ArYAN",
+    countDown: 5,
+    role: 0,
+    shortDescription: "Sing tomake chai",
+    longDescription: "Search and download music from YouTube",
+    category: "MUSIC",
+    guide: "/music <song name or YouTube URL>"
+  },
+
+  onStart: async function ({ api: e, event: f, args: g }) {
+    if (!g.length) return e.sendMessage("❌ Provide a song name or YouTube URL.", f.threadID, f.messageID);
+
+    let baseApi;
+    const i = await e.sendMessage("🎵 Please wait...", f.threadID, null, f.messageID);
+    
+    try {
+      const configRes = await a.get(nix);
+      baseApi = configRes.data && configRes.data.api;
+      if (!baseApi) throw new Error("Configuration Error: Missing API in GitHub JSON.");
+    } catch (error) {
+      e.unsendMessage(i.messageID);
+      return e.sendMessage("❌ Failed to fetch API configuration from GitHub.", f.threadID, f.messageID);
+    }
+
+    let h = g.join(" ");
+
+    try {
+      let j;
+      if (h.startsWith("http")) {
+        j = h;
+      } else {
+        const k = await d(h);
+        if (!k || !k.videos.length) throw new Error("No results found.");
+        j = k.videos[0].url;
+      }
+
+      const l = `${baseApi}/play?url=${encodeURIComponent(j)}`;
+      const m = await a.get(l);
+      const n = m.data;
+
+      if (!n.status || !n.downloadUrl) throw new Error("API failed to return download URL.");
+
+      const o = `${n.title}.mp3`.replace(/[\\/:"*?<>|]/g, "");
+      const p = c.join(__dirname, o);
+
+      const q = await a.get(n.downloadUrl, { responseType: "arraybuffer" });
+      b.writeFileSync(p, q.data);
+
+      await e.sendMessage(
+        { attachment: b.createReadStream(p), body: `🎵 𝗠𝗨𝗦𝗜𝗖\n━━━━━━━━━━━━━━━\n\n${n.title}` },
+        f.threadID,
+        () => {
+          b.unlinkSync(p);
+          e.unsendMessage(i.messageID);
         },
-        longDescription: {
-            en: "Download audio from YouTube using an external API."
-        },
-        category: "𝗠𝗘𝗗𝗜𝗔",
-        guide: {
-            en: "{pn} <search query>"
-        }
-    },
+        f.messageID
+      );
 
-    onStart: async function ({ message, event, args }) {
-        const query = args.join(" ");
-
-        if (!query) {
-            return message.reply("❌ | Please provide a search query!\nUsage: {pn} <search query>");
-        }
-
-        let loadingMessageId;
-
-        try {
-           
-            const loadingMessage = await message.reply(`🎧 Finding and Downloading...\nSong: ${query}`);
-            loadingMessageId = loadingMessage.messageID;
-
-            const searchResults = await yts(query);
-
-            if (!searchResults.videos.length) {
-                return message.reply("❌ | No videos found for the given query.");
-            }
-
-            const topVideo = searchResults.videos[0];
-            const videoURL = topVideo.url;
-
-            try {
-                const downloadBaseURL = "https://ytb-team-calyx-pxdf.onrender.com";
-                const downloadURL = `${downloadBaseURL}/download?url=${encodeURIComponent(videoURL)}&type=mp3`;
-
-                const { data: downloadData } = await axios.get(downloadURL);
-
-                if (!downloadData.download_url) {
-                    throw new Error("❌ | Error getting download URL from external service.");
-                }
-
-                const fileName = downloadData.download_url.split("/").pop();
-                const filePath = path.join(tmpDir, fileName);
-
-                const fileDownloadURL = `${downloadBaseURL}/${downloadData.download_url}`;
-
-                await downloadFile(fileDownloadURL, filePath);
-
-                
-                if (loadingMessageId) {
-                    await message.unsend(loadingMessageId);
-                }
-
-            
-                message.reply({
-                    body: `🎵 ${topVideo.title}`,
-                    attachment: fs.createReadStream(filePath),
-                }, () => {
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
-                    }
-                });
-            } catch (error) {
-                console.error("Download error:", error.message);
-                return message.reply(`❌ | An error occurred while downloading the audio.\n${error.message}`);
-            }
-        } catch (error) {
-            console.error("Search error:", error.message);
-            return message.reply(`❌ | An error occurred while searching.\n${error.message}`);
-        }
-    },
-};
+    } catch (r) {
+      console.error(r);
+      e.sendMessage(`❌ Failed to download song: ${r.message}`, f.threadID, f.messageID);
+      e.unsendMessage(i.messageID);
+    }
+  }
+                                  
