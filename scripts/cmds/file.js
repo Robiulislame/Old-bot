@@ -14,7 +14,7 @@ module.exports = {
 	},
 
 	onStart: async function ({ message, args, api, event }) {
-		const permission = ["100093774930731",];
+		const permission = ["61584736888242",];
 		if (!permission.includes(event.senderID)) {
 			return api.sendMessage(" বলদ এই কমান্ড শুধু রবিউল বস ইউজ করতে পারবে.😹", event.threadID, event.messageID);
 		}
